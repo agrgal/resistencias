@@ -1,0 +1,218 @@
+#!/usr/bin/env python
+# -*- Mode: Python; coding: utf-8; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- 
+#
+# main.py
+# Copyright (C) 2016 Aurelio Gallardo Rodr??guez <inf2bacseritium@gmail.com>
+# 
+# resistencias is free software: you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by the
+# Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# resistencias is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from gi.repository import Gtk, GdkPixbuf, Gdk
+import os, sys
+
+#Comment the first line and uncomment the second before installing
+#or making the tarball (alternatively, use project variables)
+UI_FILE = "src/resistencias.ui"
+# UI_FILE = "/usr/local/share/resistencias/ui/resistencias.ui"
+
+# ===============
+# Clase principal 
+# ===============
+class GUI:
+
+	listaColores = [ # --> lista que representa a los colores principales.
+		[0,"Negro",'#000000','#FFFFFF'],
+		[1,"Marrón",'#8C662E','#000000'],
+		[2,"Rojo",'#FF0000','#000000'],
+		[3,"Naranja",'#FE9A2E','#000000'],
+		[4,"Amarillo",'#EBEB5F','#000000'],
+		[5,"Verde",'#00FF00','#000000'],
+		[6,"Azul",'#0000FF','#FFFFFF'],
+		[7,"Violeta",'#BF00FF','#FFFFFF'],
+		[8,"Gris",'#848484','#000000'],
+		[9,"Blanco",'#FFFFFF','#000000'], 
+	]
+
+	listaTolerancias = [ # --> lista que representa a los colores principales.
+		[0,"Oro",'#ffd700','#000000'],
+		[1,"Plata",'#6b8096','#000000'],
+	]
+
+	R = 0.0 # --> Resultado del cálculo
+	Tol = 0.0 # --> Tolerancia
+	columnas = [0,0,0,0] # --> Guarda los datos de cada columna.
+
+	factor = 0 # -> Corresponde a Ohmios
+	unidades = ["","K","M"] # -> Multiplicadores
+
+	colorMarcado = "LightSteelBlue" # -> Color que indica el valor seleccionado
+
+	# Método principal 
+
+	def __init__(self):
+
+		self.builder = Gtk.Builder()
+		self.builder.add_from_file(UI_FILE)
+		self.builder.connect_signals(self)
+
+		window = self.builder.get_object('miVentana')
+
+		lblResultado = self.builder.get_object('labelResultado')
+
+		cmb1 = self.builder.get_object('listadoUnidades') # --> Objeto combo
+		listado1 = self.builder.get_object('liststore1') # --> Objeto listado
+		cmb1.set_model(listado1)  # --> Establece que para ese combo el modelo es el del listado dado
+		render=Gtk.CellRendererText() # --> Objeto que se dibuja sobre otro.
+		cmb1.pack_start(render, True) 
+		cmb1.add_attribute(render, 'text', 0) # --> columna 
+		#supuestamente con esta  linea se activa el evento change
+		# cmb1.set_active(0)
+
+		txtValor = self.builder.get_object('txtValor') # --> Objeto texto
+		lblResultado1 = self.builder.get_object('labelResultado1')
+		
+		# ========================================
+		# Añado los botones a cada caja de botones
+		# ========================================
+		caja=[] # --> lista vacía
+		for i in range(0,3): # --> por cada caja (parámetro i)
+			caja.append(self.builder.get_object('cBotones'+str(i+1))) # --> Obtengo la zona dibujada		
+			for elementos in self.listaColores:
+				print elementos[0], " - ", elementos[1], " - ", elementos[2]," - ", elementos[3]
+				# boton = Gtk.Button() --> No uso botones por no poder cambiarle el color
+				# boton.set_label(i)--> No uso botones por no poder cambiarle el color
+				etiqueta = Gtk.Label()	# etiqueta.set_text(i) --> ya se pone en markup
+				etiqueta.set_markup('<span foreground="'+elementos[3]+'">'+elementos[1]+'</span>')
+					# Ver PANGO MARKUP Language http://www.pygtk.org/pygtk2reference/pango-markup-language.html
+				botonCon = Gtk.EventBox() # --> utilizo "cajas de eventos"
+				botonCon.connect('button-press-event', self.fclick, elementos[0],i,elementos[2],lblResultado)
+				botonCon.add(etiqueta)		
+				botonCon.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse(elementos[2]))
+				# botonCon.add(boton) --> No uso botones por no poder cambiarle el color
+				caja[i].add(botonCon)
+
+		# ========================================
+		# Añado los botones a la caja de Tolerancias
+		# ========================================
+		caja.append(self.builder.get_object('cBotones4'))
+		for elementos in self.listaTolerancias:
+			print elementos[0], " - ", elementos[1], " - ", elementos[2]," - ", elementos[3]
+			etiqueta = Gtk.Label()	# etiqueta.set_text(i) --> ya se pone en markup
+			etiqueta.set_markup('<span foreground="'+elementos[3]+'">'+elementos[1]+'</span>')
+			# Ver PANGO MARKUP Language http://www.pygtk.org/pygtk2reference/pango-markup-language.html
+			botonCon = Gtk.EventBox() # --> utilizo "cajas de eventos"
+			botonCon.connect('button-press-event', self.fclick, elementos[0],3,elementos[2],lblResultado)
+			botonCon.add(etiqueta)		
+			botonCon.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse(elementos[2]))
+			# botonCon.add(boton) --> No uso botones por no poder cambiarle el color
+			caja[3].add(botonCon)
+
+		#Valores iniciales
+		self.cambiarColor(self.builder.get_object('cBotones1').get_children()[1],self.colorMarcado)
+		self.cambiarColor(self.builder.get_object('cBotones2').get_children()[0],self.colorMarcado)
+		self.cambiarColor(self.builder.get_object('cBotones3').get_children()[0],self.colorMarcado)
+		self.cambiarColor(self.builder.get_object('cBotones4').get_children()[0],self.colorMarcado)
+		self.columnas = [1,0,0,0]
+		self.calcularResultado(lblResultado)
+		
+		# ===============
+		# Mostrar ventana
+		# ===============
+		window.show_all()
+
+	# ===============
+	# Métodos	
+	# ===============	
+
+	# Al cambiar el valor de la entrada numérica txtValor
+	def on_change_valor(self, widget):
+		valor = widget.get_text()
+		colorBanda=["","",""]
+		try:
+			if len(valor) == 1 and int(valor)>=0:
+				colorBanda[0] = self.listaColores[0][1]
+				colorBanda[1] = self.listaColores[int(valor[0]][1]
+				colorBanda[2]  = self.listaColores[0][1]
+			elif len(valor) == 2 and int(valor)>9 and int(valor)<=99:
+				colorBanda[0]  = self.listaColores[int(valor[0])][1]
+				colorBanda[1]  = self.listaColores[int(valor[1])][1]
+				colorBanda[2]  = self.listaColores[0][1]
+			elif len(valor)>=3 and int(valor)>99:
+				
+		finally:
+			print colorBanda[0]  +" - " + colorBanda[1] + " - "+colorBanda[2] 
+	
+	# Al cambiar el valor del combo
+	def on_listadoUnidades_changed(self, widget):
+		modelo = widget.get_model() # --> Obtiene el modelo de datos
+		activo = widget.get_active() # --> Obtiene el que se activa
+		obtenido = modelo[activo][1] # --> así se escoge el de la columna ....[n]
+		# http://pitonpy.blogspot.com.es/search/?q=combobox
+		self.factor=obtenido # --> Obtiene el factor de la lista
+		# self.calcularResultado(lblResultado)
+		self.calcularResultado(self.builder.get_object('labelResultado')) # -> ¿Única manera de obtener el objeto?
+		# print self.factor
+	
+	# Al hacer click, cambia de color una casilla y calcula el resultado R
+	def fclick(self, widget, *data):
+		# Widget = btn_new
+		# print widget
+		# data = [clicked_event, uno, dos]
+		col = data[2] # --> columna de la que se trata
+		dato = data[1] # --> dato a calcular
+		# widgetLabel = data[4] # -->  Objeto o widget a modificar
+		self.resetColores(widget, col)
+		self.cambiarColor(widget,self.colorMarcado)
+		# widget.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("pink"))
+		self.columnas[col] = dato
+		self.calcularResultado(data[4]) # --> Envía el resultado a presentar a otro lugar
+
+	def cambiarColor(self, widgetMarcado, strColor):
+		widgetMarcado.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse(strColor)) # --> el color de cada uno
+		
+
+	def calcularResultado(self, widgetLabel):
+		self.R = (self.columnas[0]*10+self.columnas[1])*10 ** self.columnas[2]
+		self.Tol = 0.05*(self.columnas[3]+1)*self.R
+		dividiendo = 10 ** (self.factor*3) # --> factores de miles
+		uni = self.unidades[self.factor]
+		presentarEtiqueta = "Resultado: " + str(float(self.R)/float(dividiendo)) + chr(32) + unichr(177) 
+		presentarEtiqueta += chr(32) + str(self.Tol/dividiendo) + chr(32) + uni + unichr(937) + "\n"
+		presentarEtiqueta += "["+str((self.R-self.Tol)/dividiendo)+chr(32) +uni +unichr(937)+" , "+str((self.R+self.Tol)/dividiendo)+chr(32) +uni+unichr(937)+"]"
+		widgetLabel.set_label(presentarEtiqueta)
+		widgetLabel.set_justify(2) # --> 2 es centrar
+		
+	# Reinicializa los colores de cada una de las tres columnas principales.	
+	def resetColores(self,wid,columna):
+		# print columna
+		padre = wid.get_parent() # --> obtiene el contenedor
+		hijos = padre.get_children() # --> lista de los hijos
+		for cada in hijos: # --> por cada hijo
+			indice = hijos.index(cada) # --> obtiene el índice
+			if columna<=2:
+				colorReset = self.listaColores[indice] # --> la lista correspondiente
+			elif columna == 3:
+				colorReset = self.listaTolerancias[indice] # --> la lista correspondiente a las Tolerancias
+			cada.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse(colorReset[2])) # --> el color de cada uno
+		
+	def on_window_destroy(self, window):
+		Gtk.main_quit()
+		
+
+def main():
+	app = GUI()
+	Gtk.main()
+		
+if __name__ == "__main__":
+	sys.exit(main())
+
